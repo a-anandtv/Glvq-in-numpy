@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 #
@@ -94,17 +93,18 @@ def sigmoid (xData, theta = 1):
 #
 # 
 ########################################
-def plot2d (xData, xLabels, wData, wLabels, figure, dimensions=(0, 1)):
+def plot2d (plotObject, figure, xData, xLabels, wData, wLabels, dimensions=(0, 1)):
     """
         Plot a 2D slice of an N dimensional dataset. Sliced using the dimensions proivided else 1st and 2nd 
             dimensions chosen by default
         
         Parameters:
+            plotObject: Matplotlib.pyplot object to be used to plot in
+            figure: Name or Id for the figure.
             xData: Data to be plotted. (n, m) matrix. n is number of data points and m is the number of features.
             xLabels: Labels for the dataset.
             wData: Prototype data to be plotted. (k, m) matrix.
             wLabels: Labels for the prototype.
-            figure: Name or Id for the figure.
             dimensions: A 2D array of the dimesnions to be used to plot. Defaults to dimensions 0 and 1.
     """
 
@@ -117,13 +117,13 @@ def plot2d (xData, xLabels, wData, wLabels, figure, dimensions=(0, 1)):
             # Invalid dimension passed
             raise ValueError(f"Dimension value {dms} overflows the size for the given dataset.")
     
-    fig = plt.figure(figure)
+    fig = plotObject.figure(figure)
     chart = fig.add_subplot(1, 2, 1)
 
     chart.scatter(xData[:, dimensions[0]], xData[:, dimensions[1]], c=xLabels, cmap='viridis')
     chart.scatter(wData[:, dimensions[0]], wData[:, dimensions[1]], c=wLabels, marker='D')
     
-    plt.show()
+    plotObject.show()
 
 
 

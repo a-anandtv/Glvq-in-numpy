@@ -1,4 +1,12 @@
+# 
+# A Numpy implementation for Generalized LVQ
+#
+#
+# 
+########################################
+
 import numpy as np
+import matplotlib.pyplot as plt
 from glvq_utilities import squared_euclidean, sigmoid, plot2d
 
 
@@ -81,6 +89,12 @@ class Glvq:
         self.dplus = np.array([])
         self.dminus = np.array([])
 
+        # For Visualization
+        self.visualize_data = False
+        self.view_dimensions = (0,1)
+        self.showError = False
+        self.showAccuracy = False
+
 
     #
     # 
@@ -102,6 +116,8 @@ class Glvq:
         self.no_of_classes = len (np.unique(self.input_data_labels))
 
         self.data_loaded = True
+
+        print ("GLVQ Model: Data loaded.")
 
 
     #
@@ -143,6 +159,8 @@ class Glvq:
             raise ValueError(f"Unknown value passed for attribute initialize_by. Passed value: \"{initialize_by}\"")
 
         self.prototypes_init = True
+
+        print ("GLVQ Model: Prototypes generated and initialized.")
 
 
 
@@ -212,6 +230,75 @@ class Glvq:
     #
     # 
     ########################################
+    def setVisualizeOn(self, dimensions=(0, 1), showError=False, showAccuracy=False):
+        """
+            Sels and initializes the model to generate visualizations for the training
+
+            Parameters:
+                dimensions: A 2D array of the dimensions to be used to plot. Defaults to dimensions 0 and 1.
+        """
+
+        if (len(dimensions) != 2):
+            # Dimensions passed is more than 2. Raise exception
+            raise ValueError("Only 2 dimensions are allowed.")
+
+        if (self.data_loaded):
+            for dms in dimensions:
+                if (dms > self.input_data.size):
+                    # Invalid dimension passed
+                    raise ValueError(f"Dimension value {dms} overflows the size for the given dataset.")
+        else:
+            raise RuntimeError("Input data not loaded into model for validating the given view dimensions")
+
+        self.visualize_data = True
+        self.view_dimensions = dimensions
+        self.showAccuracy = showAccuracy
+        self.showError = showError
+
+        print ("GLVQ Model: Model visualization set to ON.")
+
+
+    #
+    # 
+    ########################################
+    def _plot2d(self, chart):
+        """
+            Plots a 2 dimensional scatter plot into the sublot pointed to be the variable chart.
+            Plots the input data and the prototypes into the same chart
+
+            Parameters:
+                chart: A subplot object where the scatter plot has to be plotted
+        """
+        if (not(self.visualize_data)):
+            raise RuntimeError("Model visualization not initialized.")
+        
+        chart.scatter(self.input_data[:, self.view_dimensions[0]], self.input_data[:, self.view_dimensions[1]]
+            , c=self.input_data_labels, cmap='viridis')
+        chart.scatter(self.prototypes[:, self.view_dimensions[0]], self.prototypes[:, self.view_dimensions[1]]
+            , c=self.prototype_labels, marker='D', edgecolor="black")
+
+
+    #
+    # 
+    ########################################
+    def _plotLine(self, chart, values):
+        """
+            Plots a simple line plot for the provided values
+
+            Parameters:
+                chart: A subplot object where the scatter plot has to be plotted
+                values: The list of values that has to be plotted
+        """
+        if (not(self.visualize_data)):
+            raise RuntimeError("Model visualization not initialized.")
+
+        chart.plot(np.arange(values.size), values, marker="D")
+
+
+
+    #
+    # 
+    ########################################
     def _mu(self, dplus, dminus):
         """
             Calculates the value for mu(x) = (d_plus - d_minus) / (dplus + d_minus)
@@ -223,7 +310,7 @@ class Glvq:
             Returns:
                 A 1D array of the result of mu(x)
         """
-        return (dminus - dplus) / (dminus + dplus)
+        return (dplus - dminus) / (dminus + dplus)
 
 
     #
@@ -240,7 +327,7 @@ class Glvq:
             Returns:
                 A 1D array of the result of derivative of mu(x) with respect to dplus
         """
-        return (-2) * (dminus) / np.square(dplus + dminus)
+        return (2) * (dminus) / np.square(dplus + dminus)
 
 
     #
@@ -257,7 +344,7 @@ class Glvq:
             Returns:
                 A 1D array of the result of derivative of mu(x) with respect to dplus
         """
-        return (2) * (dplus) / np.square(dplus + dminus)
+        return (-2) * (dplus) / np.square(dplus + dminus)
 
 
     #
@@ -283,7 +370,26 @@ class Glvq:
             # Placing it here since, this mask does not change with epochs
             dist_mask = np.equal(np.expand_dims(self.input_data_labels, axis=1), self.prototype_labels)
 
+            fig = plt.figure("GLVQ Model training")
+
+            # Check if visualization is set and initialize plot object
+            if (self.visualize_data):
+                chartCount = 1
+
+                if (self.showAccuracy):
+                    chartCount += 1
+                if (self.showError):
+                    chartCount += 1
+                
+                gs = fig.add_gridspec(chartCount, 1)
+                # plt.ion()
+                # plt.show()
+
             for i in range(self.epochs):
+
+                if (self.visualize_data):
+                    plt.clf()
+                
                 # Calculate element wise distances
                 distances = squared_euclidean(self.input_data, self.prototypes)
 
@@ -324,6 +430,13 @@ class Glvq:
                 new_prototypes = self.prototypes - (self.learning_rate) * update_for_prototypes
                 self.prototypes = new_prototypes
 
+                # Visualize
+                if (self.visualize_data):
+                    axes1 = fig.add_subplot(gs[0, 0])
+                    self._plot2d(axes1)
+                    plt.draw()
+                    plt.pause(0.001)
+
                 # For Validation
                 distances = squared_euclidean(self.input_data, new_prototypes)
                 nearest_matching_prototypes = np.argmin(np.where(dist_mask, distances, np.inf), axis=1)
@@ -333,8 +446,10 @@ class Glvq:
 
                 updated_cost = np.sum(self._mu(dplus, dminus))
 
-                print ("Cost: Initial: ", initial_cost, " Updated: ", updated_cost)
-
+                print ("Epoch: ", i+1, " Cost: Initial: ", initial_cost, " Updated: ", updated_cost)
+            
+            if (self.visualize_data):
+                plt.show()
             # plot2d (self.input_data, self.input_data_labels, self.prototypes, self.prototype_labels, "Data plot")
         else:
             # Model is not valid
