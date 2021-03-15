@@ -20,7 +20,11 @@ if __name__ == '__main__':
     w = np.array ([[0, 0], [1, 1], [0, 1], [1, 0], [1, 3]])
     w_labels = np.array ([0, 1, 0, 1, 2])
 
-    glvq_model = Glvq(x, x_labels)
+    glvq_model = Glvq()
+    glvq_model.load_data(x, x_labels)
+    # glvq_model._initialize_prototypes()
+    glvq_model.initialize_prototypes("initialized", w, w_labels)
+    glvq_model.fit()
 
     # print ("x labels ", x_labels.shape)
     # print ("w labels ", w_labels.shape)

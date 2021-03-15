@@ -7,11 +7,13 @@ import matplotlib.pyplot as plt
 ########################################
 def distances (xData, wPrototypes, metric = "squared-euclidean"):
     """
-        Calculates the distances between two vectors, xData and wPrototype. Returns array of distances for each data point with each of the prototypes
+        Calculates the distances between two vectors, xData and wPrototype. Returns array of distances for 
+            each data point with each of the prototypes
 
         Paramters:
             xData: Input data points. (n,m) matrix. n is number of data points. m is the number of features.
-            wPrototypes: Prototypes to which distance has to be calculated. (k,m) matrix. k is number of prototypes. m is the number of features (similar to x).
+            wPrototypes: Prototypes to which distance has to be calculated. (k,m) matrix. k is number of 
+                prototypes. m is the number of features (similar to x).
             metric: Distance calculation metric. {"squared-euclidean", "euclidean", "manhattan"}
         
         Returns:
@@ -36,6 +38,35 @@ def distances (xData, wPrototypes, metric = "squared-euclidean"):
         # Code for other distances here
         return False
 
+
+#
+# 
+########################################
+def squared_euclidean (xData, wPrototypes):
+    """
+        Calculate the squared euclidean distance between xData and wPrototypes
+            = (xData - wPrototypes) ^ 2
+        
+        Parameters:
+            xData: Input data points. (n,m) matrix. n is number of data points. m is the number of features.
+            wPrototypes: Prototypes to which distance has to be calculated. (k,m) matrix. k is number of 
+                prototypes. m is the number of features (similar to x).
+        
+        Returns:
+            Distance matrix. (n,k) matrix. Distance between each n data points to k prototypes.
+    """
+
+    # Checking if dimensions match
+    if (xData.shape[1] != wPrototypes.shape[1]):
+        # Invalid dimensions exception
+        raise ValueError("Invalid inputs. Shapes for the passed arguments do not match.")
+
+    # Caclulate Euclidean distance
+    # Using Numpy
+    expanded_data = np.expand_dims (xData, axis=1)
+    distances = np.sum (np.power (expanded_data - wPrototypes, 2), axis=2)
+
+    return distances.astype(float)
 
 
 #
@@ -63,14 +94,17 @@ def sigmoid (xData, theta = 1):
 #
 # 
 ########################################
-def plot2d (xData, figure, dimensions=(0, 1)):
+def plot2d (xData, xLabels, wData, wLabels, figure, dimensions=(0, 1)):
     """
         Plot a 2D slice of an N dimensional dataset. Sliced using the dimensions proivided else 1st and 2nd 
             dimensions chosen by default
         
         Parameters:
-            xData: Data to be plotted. (n, m) matrix. n is number of data points and m is the number of features
-            figure: Name or Id for the figure
+            xData: Data to be plotted. (n, m) matrix. n is number of data points and m is the number of features.
+            xLabels: Labels for the dataset.
+            wData: Prototype data to be plotted. (k, m) matrix.
+            wLabels: Labels for the prototype.
+            figure: Name or Id for the figure.
             dimensions: A 2D array of the dimesnions to be used to plot. Defaults to dimensions 0 and 1.
     """
 
@@ -85,8 +119,10 @@ def plot2d (xData, figure, dimensions=(0, 1)):
     
     fig = plt.figure(figure)
     chart = fig.add_subplot(1, 2, 1)
-    chart.scatter(xData[:, dimensions[0]], xData[:, dimensions[1]])
 
+    chart.scatter(xData[:, dimensions[0]], xData[:, dimensions[1]], c=xLabels, cmap='viridis')
+    chart.scatter(wData[:, dimensions[0]], wData[:, dimensions[1]], c=wLabels, marker='D')
+    
     plt.show()
 
 

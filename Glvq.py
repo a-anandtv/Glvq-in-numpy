@@ -1,5 +1,5 @@
 import numpy as np
-from glvq_utilities import distances, sigmoid, plot2d
+from glvq_utilities import squared_euclidean, sigmoid, plot2d
 
 
 #
@@ -10,7 +10,7 @@ class Glvq:
         Class for creating and training a Generalized Learning Vector Quantization network 
             and use this network to predict for new data.
 
-        Attributes:
+        Parameters:
             input_data: 
                 (n,m) matrix of data with n data points and m features.
             input_data_labels:
@@ -50,16 +50,45 @@ class Glvq:
     #
     # 
     ########################################
-    def __init__ (self, input_data, input_data_labels, prototypes_per_class=1, prototype_init="class-mean",
-        learning_rate=0.01, epochs=30, validation_set_percentage=0.1, stop_by=5):
+    def __init__(self, prototypes_per_class=1, learning_rate=0.01, epochs=30, 
+        validation_set_percentage=0.1, stop_by=5):
         """
-            Function initializes model with given input data and attributes or using the default
+            Function initializes model with given attributes or using the default
                 values for the attributes.
         """
 
         # Identifier to check if model has initialized correctly
-        self.valid_model = False
+        self.data_loaded = False
+        self.prototypes_init = False
 
+        if (prototypes_per_class < 1):
+            # Prototypes per class has to be >= 1
+            raise ValueError("At least 1 prototype per class expected.")
+
+        # Model attributes
+        self.prototypes_per_class = prototypes_per_class
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+        self.validation_set_percentage = validation_set_percentage
+        self.stop_by = stop_by
+
+        # Data collected
+        self.input_data = np.array([])
+        self.input_data_labels = np.array([])
+        self.prototypes = np.array([])
+        self.prototype_labels = np.array([])
+        self.distances = np.array([])
+        self.dplus = np.array([])
+        self.dminus = np.array([])
+
+
+    #
+    # 
+    ########################################
+    def load_data(self, input_data, input_data_labels):
+        """
+            Funtion to load data into the model.
+        """
         # Saving input data
         self.input_data = input_data
 
@@ -68,50 +97,245 @@ class Glvq:
             raise ValueError(f"Error! Invalid input label size. Input size of {len(self.input_data)}, Input label size is {len(input_data_labels)}.")
         
         self.input_data_labels = input_data_labels
-        self.prototypes_per_class = prototypes_per_class
-        self.prototype_init = prototype_init
-        self.learning_rate = learning_rate
-        self.epochs = epochs
-        self.validation_set_percentage = validation_set_percentage
-        self.stop_by = stop_by
 
         # Count the number of unique classes
-        self.no_of_classes = len (np.unique(input_data_labels))
+        self.no_of_classes = len (np.unique(self.input_data_labels))
 
-        if (prototype_init == "class-mean"):
-            self.__generateClassMeanPrototypes__()
-        elif (prototype_init == "random-input"):
-            self.__generateRandomInputPrototypes__()
-        elif (prototype_init == "random"):
-            self.__generateRandomPrototypes__()
+        self.data_loaded = True
+
+
+    #
+    # 
+    ########################################
+    def initialize_prototypes(self, initialize_by="class-mean", pass_w=[], pass_w_labels=[]):
+        """
+            Function to initialize prototypes in the model.
+        """
+        self.initialize_by = initialize_by
+
+        # Initialize the prototypes
+        if (initialize_by == "initialized"):
+            if (len(pass_w) != 0) and (len(pass_w_labels) != 0):
+                if (self.input_data.shape[1] == pass_w.shape[1]) and (len(pass_w_labels) == len(pass_w)):
+                    self.prototypes = pass_w
+                    self.prototype_labels = pass_w_labels
+                else:
+                    raise ValueError("Attribute shapes do not match. ")
+            else:
+                raise RuntimeError("Missing arguments. Initial weights and weight labels expected")  
+        elif (initialize_by == "class-mean"):
+            if self.data_loaded:
+                self.prototypes, self.prototype_labels = self._generateClassMeanPrototypes(
+                    self.input_data, 
+                    self.input_data_labels, 
+                    self.prototypes_per_class, 
+                    self.no_of_classes)
+            else:
+                raise RuntimeError("Data not loaded into the model. Model requires data to process for class means.")
+        elif (initialize_by == "random-input"):
+            if self.data_loaded:
+                self.prototypes, self.prototype_labels = self._generateRandomInputPrototypes()
+            else:
+                raise RuntimeError("Data not loaded into the model. Model requires data to process for class means.")
+        elif (initialize_by == "random"):
+            self.prototypes, self.prototype_labels = self._generateRandomPrototypes()
         else:
-            raise ValueError(f"Unknown value passed for attribute prototype_init. Passed value: {prototype_init}")
+            raise ValueError(f"Unknown value passed for attribute initialize_by. Passed value: \"{initialize_by}\"")
 
-        plot2d (self.input_data, "Data plot")
+        self.prototypes_init = True
 
-
-    #
-    # 
-    ########################################
-    def __generateClassMeanPrototypes__(self):
-        """
-            Generates a set of prototypes initialized to the specific class mean
-        """
 
 
     #
     # 
     ########################################
-    def __generateRandomInputPrototypes__(self):
+    def _generateClassMeanPrototypes(self, xData, xLabels, k, C):
+        """
+            Generates a set of prototypes initialized to the specific class mean.
+            
+            Parameters:
+                xData: Input dataset. (n,m) dimension.
+                xLabels: Data labels for the input dataset. (n,) dimension.
+                k: Number of prototypes per class.
+                C: Number of classes.
+            
+            Returns:
+                prototypes: Array of initialized prototypes. (k*C,m) dimension.
+                prototype_labels: Array of labels for the prototypes. (k*C,) dimension.
+        """
+
+        unique_labels = np.unique(xLabels)  # (C,)
+        unique_label_mask = np.equal(xLabels, np.expand_dims(unique_labels, axis=1))   # (C,n)
+
+        # Use this mask to get matching xData
+        class_data = np.where(np.expand_dims(unique_label_mask, axis=2), xData, 0)  # (C,n,m)
+
+        # Count number of elements per class
+        elmnts_per_class = np.sum(unique_label_mask, axis=1)    # (C,)
+
+        # Initial location for prototypes (class means)
+        class_means = np.sum(class_data, axis=1) / np.expand_dims(elmnts_per_class, axis=1) # (C,m)
+
+        prototype_labels = list(unique_labels) * k
+        prototypes = class_means[prototype_labels]
+
+        return prototypes, prototype_labels
+
+
+
+    #
+    # 
+    ########################################
+    def _generateRandomInputPrototypes(self):
         """
             Generates a set of prototypes initialized to a random input data point
         """
+        prototype_labels = list([])
+        prototypes = np.array([])
+        
+        return prototypes, prototype_labels
 
 
     #
     # 
     ########################################
-    def __generateRandomPrototypes__(self):
+    def _generateRandomPrototypes(self):
         """
             Generates a set of prototypes initialized randomly in the data space
         """
+        prototype_labels = list([])
+        prototypes = np.array([])
+
+        return prototypes, prototype_labels
+
+
+    #
+    # 
+    ########################################
+    def _mu(self, dplus, dminus):
+        """
+            Calculates the value for mu(x) = (d_plus - d_minus) / (dplus + d_minus)
+
+            Parameters:
+                dplus: A 1D array of d_plus values. Size is equal to that of the data points
+                dminus: A 1D array of d_minus values. Size is equal to that of the data points
+            
+            Returns:
+                A 1D array of the result of mu(x)
+        """
+        return (dminus - dplus) / (dminus + dplus)
+
+
+    #
+    # 
+    ########################################
+    def _mu_dash_dplus(self, dplus, dminus):
+        """
+            Returns the first order derivative of the classifier function mu(x) with respect to dplus
+
+            Parameters:
+                dplus: A 1D array of d_plus values. Size is equal to that of the data points
+                dminus: A 1D array of d_minus values. Size is equal to that of the data points
+            
+            Returns:
+                A 1D array of the result of derivative of mu(x) with respect to dplus
+        """
+        return (-2) * (dminus) / np.square(dplus + dminus)
+
+
+    #
+    # 
+    ########################################
+    def _mu_dash_dminus(self, dplus, dminus):
+        """
+            Returns the first order derivative of the classifier function mu(x) with respect to dplus
+
+            Parameters:
+                dplus: A 1D array of d_plus values. Size is equal to that of the data points
+                dminus: A 1D array of d_minus values. Size is equal to that of the data points
+            
+            Returns:
+                A 1D array of the result of derivative of mu(x) with respect to dplus
+        """
+        return (2) * (dplus) / np.square(dplus + dminus)
+
+
+    #
+    # 
+    ########################################
+    def fit(self):
+        """
+            Run the model with initialized values. Function optimizes the prototypes minimizing the
+                GLVQ classification error
+        """
+        distances = self.distances
+        dplus = self.dplus
+        dminus = self.dminus
+
+        # Check if model has data loaded and prototypes initialized
+        if self.data_loaded and self.prototypes_init:
+            # Model is valid
+
+            # Number of datapoints
+            n_x = len(self.input_data)
+
+            # Use the data labels and prototype labels to define a mask
+            # Placing it here since, this mask does not change with epochs
+            dist_mask = np.equal(np.expand_dims(self.input_data_labels, axis=1), self.prototype_labels)
+
+            for i in range(self.epochs):
+                # Calculate element wise distances
+                distances = squared_euclidean(self.input_data, self.prototypes)
+
+                # Use this mask to identify and mark distances to correctly matched prototypes
+                # And then find the argument for the closest prototype
+                nearest_matching_prototypes = np.argmin(np.where(dist_mask, distances, np.inf), axis=1)
+                nearest_mismatched_prototypes = np.argmin(np.where(np.logical_not(dist_mask), distances, np.inf), axis=1)
+
+                # dplus and dminus seperated from the distances matrix
+                dplus = distances[np.arange(n_x), nearest_matching_prototypes]
+                dminus = distances[np.arange(n_x), nearest_mismatched_prototypes]
+
+                # Initial cost for validation
+                initial_cost = np.sum(self._mu(dplus, dminus))
+
+                # Components of the gradient of the cost function _mu(x)
+                # x - w split for wplus and wminus respectively
+                x_minus_wplus = self.input_data - self.prototypes[nearest_matching_prototypes]
+                x_minus_wminus = self.input_data - self.prototypes[nearest_mismatched_prototypes]
+
+                # d _mu(x) / d distance fn : split with respect to dplus and dminus
+                change_in_dplus = self._mu_dash_dplus(dplus, dminus) * sigmoid(self._mu(dplus, dminus)) \
+                    * (1 - sigmoid(self._mu(dplus, dminus)))
+                change_in_dminus = self._mu_dash_dminus(dplus, dminus) * sigmoid(self._mu(dplus, dminus)) \
+                    * (1 - sigmoid(self._mu(dplus, dminus)))
+                
+                # Combining the components to assemble the gradient of the cost function _mu(x)
+                dell_mu_wplus = (-2) * x_minus_wplus * np.expand_dims(change_in_dplus, axis=1)
+                dell_mu_wminus = (-2) * x_minus_wminus * np.expand_dims(change_in_dminus, axis=1)
+
+                # Generating an update matrix with the calculated gradient
+                update_for_prototypes = np.zeros((distances.shape[0], distances.shape[1], self.input_data.shape[1]))
+                update_for_prototypes[np.arange(n_x), nearest_matching_prototypes] += dell_mu_wplus
+                update_for_prototypes[np.arange(n_x), nearest_mismatched_prototypes] += dell_mu_wminus
+                update_for_prototypes = np.sum(update_for_prototypes, axis=0)
+
+                # Update the prototypes
+                new_prototypes = self.prototypes - (self.learning_rate) * update_for_prototypes
+                self.prototypes = new_prototypes
+
+                # For Validation
+                distances = squared_euclidean(self.input_data, new_prototypes)
+                nearest_matching_prototypes = np.argmin(np.where(dist_mask, distances, np.inf), axis=1)
+                nearest_mismatched_prototypes = np.argmin(np.where(np.logical_not(dist_mask), distances, np.inf), axis=1)
+                dplus = distances[np.arange(n_x), nearest_matching_prototypes]
+                dminus = distances[np.arange(n_x), nearest_mismatched_prototypes]
+
+                updated_cost = np.sum(self._mu(dplus, dminus))
+
+                print ("Cost: Initial: ", initial_cost, " Updated: ", updated_cost)
+
+            # plot2d (self.input_data, self.input_data_labels, self.prototypes, self.prototype_labels, "Data plot")
+        else:
+            # Model is not valid
+            raise RuntimeError("Model not initialized properly to run _fit().")
