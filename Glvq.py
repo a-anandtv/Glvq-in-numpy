@@ -88,6 +88,8 @@ class Glvq:
         self.distances = np.array([])
         self.dplus = np.array([])
         self.dminus = np.array([])
+        self.costs = np.array([])
+        self.accuracies = np.array([])
 
         # For Visualization
         self.visualize_data = False
@@ -255,6 +257,15 @@ class Glvq:
         self.showAccuracy = showAccuracy
         self.showError = showError
 
+        # Forming mesh for drawing the decision boundaries
+        # grid_step_size = 0.01
+        # x_min = self.input_data[:, self.view_dimensions[0]].min() - 1
+        # x_max = self.input_data[:, self.view_dimensions[0]].max() + 1
+        # y_min = self.input_data[:, self.view_dimensions[1]].min() - 1
+        # y_max = self.input_data[:, self.view_dimensions[1]].max() + 1
+
+        # self.xx, self.yy = np.meshgrid(np.arange(x_min, x_max, grid_step_size), np.arange(y_min, y_max, grid_step_size))
+
         print ("GLVQ Model: Model visualization set to ON.")
 
 
@@ -264,18 +275,26 @@ class Glvq:
     def _plot2d(self, chart):
         """
             Plots a 2 dimensional scatter plot into the sublot pointed to be the variable chart.
-            Plots the input data and the prototypes into the same chart
+            Plots the input data and the prototypes into the same chart.
+            Also plots the decision boundaries formed by the prototypes.
 
             Parameters:
                 chart: A subplot object where the scatter plot has to be plotted
         """
         if (not(self.visualize_data)):
             raise RuntimeError("Model visualization not initialized.")
+
+        # print ("distance: ", squared_euclidean(self.input_data[:, (self.view_dimensions)],
+        #                          np.c_[self.xx.ravel(), self.yy.ravel()]).shape)
+
+        # contour_heights = self.prototype_labels[np.argmin(squared_euclidean(self.input_data[:, (self.view_dimensions)],
+        #                          np.c_[self.xx.ravel(), self.yy.ravel()]), axis=1)]
         
         chart.scatter(self.input_data[:, self.view_dimensions[0]], self.input_data[:, self.view_dimensions[1]]
             , c=self.input_data_labels, cmap='viridis')
         chart.scatter(self.prototypes[:, self.view_dimensions[0]], self.prototypes[:, self.view_dimensions[1]]
             , c=self.prototype_labels, marker='D', edgecolor="black")
+        # chart.contourf(xx, yy, contour_heights, cmap='viridis', alpha=0.6)
 
 
     #
@@ -292,7 +311,7 @@ class Glvq:
         if (not(self.visualize_data)):
             raise RuntimeError("Model visualization not initialized.")
 
-        chart.plot(np.arange(values.size), values, marker="D")
+        chart.plot(np.arange(values.size), values, marker="d")
 
 
 
@@ -370,7 +389,7 @@ class Glvq:
             # Placing it here since, this mask does not change with epochs
             dist_mask = np.equal(np.expand_dims(self.input_data_labels, axis=1), self.prototype_labels)
 
-            fig = plt.figure("GLVQ Model training")
+            fig = plt.figure("GLVQ Model Training!", figsize=(10, 10))
 
             # Check if visualization is set and initialize plot object
             if (self.visualize_data):
@@ -381,7 +400,7 @@ class Glvq:
                 if (self.showError):
                     chartCount += 1
                 
-                gs = fig.add_gridspec(chartCount, 1)
+                gs = fig.add_gridspec(chartCount, 2)
                 # plt.ion()
                 # plt.show()
 
@@ -404,6 +423,12 @@ class Glvq:
 
                 # Initial cost for validation
                 initial_cost = np.sum(self._mu(dplus, dminus))
+
+                if (i == 0):
+                    self.costs = np.append(self.costs, initial_cost)
+
+                    accuracy = round((np.sum(dplus < dminus) / n_x) * 100, 3)
+                    self.accuracies = np.append(self.accuracies, accuracy)
 
                 # Components of the gradient of the cost function _mu(x)
                 # x - w split for wplus and wminus respectively
@@ -432,8 +457,20 @@ class Glvq:
 
                 # Visualize
                 if (self.visualize_data):
-                    axes1 = fig.add_subplot(gs[0, 0])
+                    pos = 0
+                    axes1 = fig.add_subplot(gs[pos, :], title="Data plot")
                     self._plot2d(axes1)
+
+                    if (self.showError):
+                        pos += 1
+                        axes2 = fig.add_subplot(gs[pos, :], title="Error trend")
+                        self._plotLine(axes2, self.costs)
+
+                    if (self.showAccuracy):
+                        pos += 1
+                        axes3 = fig.add_subplot(gs[pos, :], title="Accuracy trend (in %)")
+                        self._plotLine(axes3, self.accuracies)
+
                     plt.draw()
                     plt.pause(0.001)
 
@@ -446,7 +483,14 @@ class Glvq:
 
                 updated_cost = np.sum(self._mu(dplus, dminus))
 
-                print ("Epoch: ", i+1, " Cost: Initial: ", initial_cost, " Updated: ", updated_cost)
+                # Store calculated costs for the training epoch
+                self.costs = np.append(self.costs, updated_cost)
+
+                # Calculate and store accuracy
+                accuracy = round((np.sum(dplus < dminus) / n_x) * 100, 3)
+                self.accuracies = np.append(self.accuracies, accuracy)
+
+                print ("Epoch: ", i+1, " Cost: ", self.costs[i], " Accuracy: ", self.accuracies[i], "%")
             
             if (self.visualize_data):
                 plt.show()
@@ -454,3 +498,24 @@ class Glvq:
         else:
             # Model is not valid
             raise RuntimeError("Model not initialized properly to run _fit().")
+
+
+    #
+    # 
+    ########################################
+    def predict(self, predictData):
+        """
+            Generate a prediction for a provided data point or data matrix
+
+            Parameter:
+                predicData: A (n,m) matrix of n datapoints with m features each
+            
+            Returns:
+                A (n,) array of labels for the provided dataset
+        """
+        if (predictData.shape[1] != self.prototypes.shape[1]):
+            raise ValueError("Dimension of the data to be predicted does not match with the model prototypes")
+
+        closest_prototypes = np.argmin(squared_euclidean(predictData, self.prototypes), axis=1)
+
+        return self.prototype_labels[closest_prototypes]
