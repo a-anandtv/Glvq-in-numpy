@@ -210,6 +210,8 @@ class Glvq:
         """
             Generates a set of prototypes initialized to a random input data point
         """
+        
+
         prototype_labels = list([])
         prototypes = np.array([])
         
