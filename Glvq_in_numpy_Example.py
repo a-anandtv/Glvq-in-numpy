@@ -1,8 +1,8 @@
 # 
 # A Numpy implementation for Generalized LVQ
+# A self made test with self generated inputs
 #
-#
-# 
+# By: Akash Anand
 ########################################
 
 import numpy as np
@@ -23,7 +23,8 @@ if __name__ == '__main__':
     glvq_model = Glvq()
     glvq_model.load_data(x, x_labels)
     # glvq_model._initialize_prototypes()
-    glvq_model.initialize_prototypes("initialized", w, w_labels)
+    # glvq_model.initialize_prototypes("initialized", w, w_labels)
+    glvq_model.initialize_prototypes("random")
     glvq_model.fit()
 
     # print ("x labels ", x_labels.shape)

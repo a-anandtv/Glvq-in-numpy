@@ -1,3 +1,10 @@
+# 
+# A utility class to support the Glvq class
+#
+#
+# By: Akash Anand
+########################################
+
 import numpy as np
 
 

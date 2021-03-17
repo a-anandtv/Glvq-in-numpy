@@ -2,7 +2,7 @@
 # A Numpy implementation for Generalized LVQ
 #
 #
-# 
+# By: Akash Anand
 ########################################
 
 import numpy as np
@@ -19,22 +19,9 @@ class Glvq:
             and use this network to predict for new data.
 
         Parameters:
-            input_data: 
-                (n,m) matrix of data with n data points and m features.
-            input_data_labels:
-                (n,) element array of data labels. Labels representing each data point 
-                    respectively.
             prototypes_per_class:
                 k number of prototypes per class > 1.
                 Default: 1
-            prorotype_init:
-                Initialization type for the prototype.
-                Possible values: 
-                    "class-mean": Prototypes are initialized to the mean of datapoints belonging to each class.
-                    "random-input": Prototypes are initialized to a random data point in each class.
-                    "random": Prototypes are mapped to random points in the data space.
-                Default: 
-                    Default is set to "class-mean".
             learning_rate:
                 Learning rate for the model.
                 Default: 0.01
@@ -48,10 +35,6 @@ class Glvq:
                 Number of epochs to continue after the accuracy has stabilized 
                     (accuracy changes between epochs is < 10E-4).
                 Default: 5
-            prototypes:
-                (k * number of distinct input data labels, m) matrix of prototypes
-            prototype_labels:
-                (k * number of distinct input data labels,) element array of labels for the prototypes.
     """
 
 
@@ -71,7 +54,7 @@ class Glvq:
 
         if (prototypes_per_class < 1):
             # Prototypes per class has to be >= 1
-            raise ValueError("At least 1 prototype per class expected.")
+            raise ValueError("At least 1 prototype per class needed.")
 
         # Model attributes
         self.prototypes_per_class = prototypes_per_class
@@ -104,6 +87,13 @@ class Glvq:
     def load_data(self, input_data, input_data_labels):
         """
             Funtion to load data into the model.
+
+            Parameters:
+                input_data: 
+                    (n,m) matrix of data with n data points and m features.
+                input_data_labels:
+                    (n,) element array of data labels. Labels representing each data point 
+                        respectively.
         """
         # Saving input data
         self.input_data = input_data
@@ -128,6 +118,21 @@ class Glvq:
     def initialize_prototypes(self, initialize_by="class-mean", pass_w=[], pass_w_labels=[]):
         """
             Function to initialize prototypes in the model.
+
+            Parameters:
+                initialize_by:
+                    Initialization type for the prototype.
+                    Possible values:
+                        "initialized": When prototypes are already decided and will have to be passed into the class. 
+                        "class-mean": Prototypes are initialized to the mean of datapoints belonging to each class.
+                        "random-input": Prototypes are initialized to a random data point in each class.
+                        "random": Prototypes are mapped to random points in the data space.
+                    Default: 
+                        Default is set to "class-mean".
+                pass_w:
+                    Set of prototypes to be used if you already have pre decided prototypes
+                pass_w_labels:
+                    Set of prototype labels to be used if you already have pre decided prototypes
         """
         self.initialize_by = initialize_by
 
@@ -210,10 +215,20 @@ class Glvq:
         """
             Generates a set of prototypes initialized to a random input data point
         """
-        
+        index_list = np.arange(len(self.input_data_labels))
+        no_classes = len(np.unique(self.input_data_labels))
 
         prototype_labels = list([])
         prototypes = np.array([])
+
+        for i in np.unique(self.input_data_labels):
+            prototypes = np.append(prototypes, 
+                                    self.input_data[np.random.choice(index_list[self.input_data_labels == i], 
+                                    self.prototypes_per_class)])
+            prototype_labels = np.append(prototype_labels, [i] * self.prototypes_per_class)
+        
+        prototypes = prototypes.reshape(self.prototypes_per_class * no_classes, 
+                                        self.input_data.shape[1])
         
         return prototypes, prototype_labels
 
@@ -225,8 +240,21 @@ class Glvq:
         """
             Generates a set of prototypes initialized randomly in the data space
         """
-        prototype_labels = list([])
+        no_classes = len(np.unique(self.input_data_labels))
+
+        prototype_labels = [i for i in np.unique(self.input_data_labels)] * self.prototypes_per_class
         prototypes = np.array([])
+
+        mins = np.min(self.input_data, axis=0)
+        maxs = np.max(self.input_data, axis=0)
+
+        for each in np.c_[mins, maxs]:
+            prototypes = np.append(prototypes, np.random.uniform(each[0], each[1], no_classes * self.prototypes_per_class))
+        
+        prototypes = np.reshape(prototypes, (self.input_data.shape[1], no_classes * self.prototypes_per_class)).T
+
+        print (prototypes)
+        print (prototype_labels)
 
         return prototypes, prototype_labels
 
