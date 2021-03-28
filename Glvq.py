@@ -98,6 +98,9 @@ class Glvq:
         # Saving input data
         self.input_data = input_data
 
+        # Normalize the data
+        # self.normalize_data ()
+
         if (len(self.input_data) != len(input_data_labels)):
             # Labels do not match to the passed input
             raise ValueError(f"Error! Invalid input label size. Input size of {len(self.input_data)}, Input label size is {len(input_data_labels)}.")
@@ -110,6 +113,16 @@ class Glvq:
         self.data_loaded = True
 
         print ("GLVQ Model: Data loaded.")
+
+
+    #
+    # 
+    ########################################
+    def normalize_data(self):
+        """
+            Normalizes data in place using a min-max-scaling strategy
+        """
+        self.input_data = (self.input_data - np.min(self.input_data, axis=0)) / (np.max(self.input_data, axis=0) - np.min(self.input_data, axis=0))
 
 
     #
@@ -201,7 +214,7 @@ class Glvq:
         # Initial location for prototypes (class means)
         class_means = np.sum(class_data, axis=1) / np.expand_dims(elmnts_per_class, axis=1) # (C,m)
 
-        prototype_labels = list(unique_labels) * k
+        prototype_labels = np.array(list(unique_labels) * k)
         prototypes = class_means[prototype_labels]
 
         return prototypes, prototype_labels
@@ -242,7 +255,7 @@ class Glvq:
         """
         no_classes = len(np.unique(self.input_data_labels))
 
-        prototype_labels = [i for i in np.unique(self.input_data_labels)] * self.prototypes_per_class
+        prototype_labels = np.array([i for i in np.unique(self.input_data_labels)] * self.prototypes_per_class)
         prototypes = np.array([])
 
         mins = np.min(self.input_data, axis=0)
@@ -253,8 +266,8 @@ class Glvq:
         
         prototypes = np.reshape(prototypes, (self.input_data.shape[1], no_classes * self.prototypes_per_class)).T
 
-        print (prototypes)
-        print (prototype_labels)
+        # print (prototypes)
+        # print (prototype_labels)
 
         return prototypes, prototype_labels
 
@@ -288,13 +301,19 @@ class Glvq:
         self.showError = showError
 
         # Forming mesh for drawing the decision boundaries
-        # grid_step_size = 0.01
-        # x_min = self.input_data[:, self.view_dimensions[0]].min() - 1
-        # x_max = self.input_data[:, self.view_dimensions[0]].max() + 1
-        # y_min = self.input_data[:, self.view_dimensions[1]].min() - 1
-        # y_max = self.input_data[:, self.view_dimensions[1]].max() + 1
+        grid_step_size = 0.1
+        x_min = self.input_data[:, self.view_dimensions[0]].min() - grid_step_size
+        x_max = self.input_data[:, self.view_dimensions[0]].max() + grid_step_size
+        y_min = self.input_data[:, self.view_dimensions[1]].min() - grid_step_size
+        y_max = self.input_data[:, self.view_dimensions[1]].max() + grid_step_size
 
-        # self.xx, self.yy = np.meshgrid(np.arange(x_min, x_max, grid_step_size), np.arange(y_min, y_max, grid_step_size))
+        self.xx, self.yy = np.meshgrid(np.arange(x_min, x_max, grid_step_size), np.arange(y_min, y_max, grid_step_size))
+
+        # print ("np.c_: ", np.c_[self.xx.ravel(), self.yy.ravel()].shape)
+        # print ("Prototypes: ", self.prototypes[:, self.view_dimensions])
+        
+        # self.prototype_labels[np.argmin(squared_euclidean(self.input_data[:, (self.view_dimensions)],
+        #                          np.c_[self.xx.ravel(), self.yy.ravel()]), axis=1)]
 
         print ("GLVQ Model: Model visualization set to ON.")
 
@@ -314,17 +333,22 @@ class Glvq:
         if (not(self.visualize_data)):
             raise RuntimeError("Model visualization not initialized.")
 
-        # print ("distance: ", squared_euclidean(self.input_data[:, (self.view_dimensions)],
-        #                          np.c_[self.xx.ravel(), self.yy.ravel()]).shape)
+        print ("distance: ", squared_euclidean(self.input_data[:, (self.view_dimensions)],
+                                 np.c_[self.xx.ravel(), self.yy.ravel()]).shape)
 
-        # contour_heights = self.prototype_labels[np.argmin(squared_euclidean(self.input_data[:, (self.view_dimensions)],
-        #                          np.c_[self.xx.ravel(), self.yy.ravel()]), axis=1)]
+        contour_heights = self._calculate_contour_heights(
+            np.c_[self.xx.ravel(), self.yy.ravel()], 
+            self.prototypes[:, self.view_dimensions])
+        
+        contour_heights = contour_heights.reshape(self.xx.shape)
+        
+        # print ("contour_heights: ", contour_heights)
         
         chart.scatter(self.input_data[:, self.view_dimensions[0]], self.input_data[:, self.view_dimensions[1]]
             , c=self.input_data_labels, cmap='viridis')
         chart.scatter(self.prototypes[:, self.view_dimensions[0]], self.prototypes[:, self.view_dimensions[1]]
             , c=self.prototype_labels, marker='D', edgecolor="black")
-        # chart.contourf(xx, yy, contour_heights, cmap='viridis', alpha=0.6)
+        chart.contourf(self.xx, self.yy, contour_heights, len(np.unique(self.prototype_labels)) - 1, cmap='viridis', alpha=0.6)
 
 
     #
@@ -547,5 +571,27 @@ class Glvq:
             raise ValueError("Dimension of the data to be predicted does not match with the model prototypes")
 
         closest_prototypes = np.argmin(squared_euclidean(predictData, self.prototypes), axis=1)
+
+        return self.prototype_labels[closest_prototypes]
+
+
+    #
+    # 
+    ########################################
+    def _calculate_contour_heights(self, xData, prototypes):
+        """
+            Internal function to calculate contour heights to draw decision boundaries
+
+            Parameters:
+                xData: Data vectors
+                protoypes: Prototype vectors
+
+            Return:
+                An array of labels for the closest prototypes
+        """
+        if (xData.shape[1] != prototypes.shape[1]):
+            raise ValueError("Dimension of the data to be predicted does not match with the model prototypes")
+        
+        closest_prototypes = np.argmin(squared_euclidean(xData, prototypes), axis=1)
 
         return self.prototype_labels[closest_prototypes]
