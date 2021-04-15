@@ -56,6 +56,18 @@ predicted_class = model.predict(predict_data)
 
 
 
+## Example training results
+
+* Training on the IRIS dataset with 6 prototypes per class.
+<p align="center">
+  <img src="https://github.com/a-anandtv/Glvq-in-numpy/blob/main/Resources/iris_dataset_training.png" width="70%">
+</p>
+
+* Training on a synthesized moon shaped dataset with 9 prototypes per class
+<p align="center">
+  <img src="https://github.com/a-anandtv/Glvq-in-numpy/blob/main/Resources/scikit_moon_dataset_trained.png" width="70%">
+</p>
+
 ## A brief description for GLVQ
 
 GLVQ is a form of vector quantization which uses the nearest prototypes with maching labels and mismatched labels to optimize the prototypes. The model has a generalized cost function introduced that is continuous and mathematically differentiable. This will help with optimizing the model by taking a derivative of the cost function and use it to optimize the position for the prototypes. These optimized prototypes can then be used as quantised representation for the data points and use these for future data classification.
@@ -87,6 +99,4 @@ And the prototypes are updated by,
 Where **alpha** is the learning rate.
 
 ## Next update
-* Add a normalizer for the input data
-* Add visualization for decision boundary and receptive fields
 * Introduce a stop by mechanic where in the training stops when the learning is slower than a pre defined value
