@@ -348,7 +348,7 @@ class Glvq:
             , c=self.input_data_labels, cmap='viridis')
         chart.scatter(self.prototypes[:, self.view_dimensions[0]], self.prototypes[:, self.view_dimensions[1]]
             , c=self.prototype_labels, marker='D', edgecolor="black")
-        chart.contourf(self.xx, self.yy, contour_heights, len(np.unique(self.prototype_labels)) - 1, cmap='viridis', alpha=0.6)
+        chart.contourf(self.xx, self.yy, contour_heights, len(np.unique(self.prototype_labels)) - 1, cmap='viridis', alpha=0.2)
 
 
     #

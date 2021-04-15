@@ -19,8 +19,8 @@ from glvq_utilities import plot2d
 ########################################
 if __name__ == '__main__':
 
-    prototype_per_class = 5
-    epochs = 30
+    prototype_per_class = 6
+    epochs = 50
     iris = load_iris()
     input_data = iris.data
     data_labels = iris.target
